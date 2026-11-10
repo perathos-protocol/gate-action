@@ -1,0 +1,51 @@
+name: Demo deploy (needs a passkey approval)
+
+# Run by hand from the Actions tab. The "deploy" below is a stand-in that prints a line;
+# the approval, the receipt and its verification are real.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to "deploy" to
+        default: production
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build
+        run: echo "build ok for ${GITHUB_SHA}"
+
+      - name: Approval from a person, with a passkey
+        id: gate
+        uses: ./
+        with:
+          summary: Deploy gate-action demo to ${{ inputs.environment }}
+          target: ${{ inputs.environment }}
+          api-key: ${{ secrets.PERATHOS_GATE_API_KEY }}
+          gate-key: ${{ vars.PERATHOS_GATE_KEY }}
+          approver-keys: ${{ vars.PERATHOS_GATE_APPROVERS }}
+
+      - name: Deploy (stand-in)
+        env:
+          APPROVER: ${{ steps.gate.outputs.approver }}
+          RECEIPT_HASH: ${{ steps.gate.outputs.receipt-hash }}
+        run: echo "deploying; approved by ${APPROVER}, receipt ${RECEIPT_HASH}"
+
+      - name: Verify the receipt again, the way an auditor would
+        env:
+          GATE_KEY: ${{ vars.PERATHOS_GATE_KEY }}
+          PERATHOS_GATE_APPROVERS: ${{ vars.PERATHOS_GATE_APPROVERS }}
+          RECEIPT: ${{ steps.gate.outputs.receipt-path }}
+        run: perathos gate verify "${RECEIPT}" --gate-key "${GATE_KEY}"

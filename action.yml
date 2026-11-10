@@ -1,0 +1,110 @@
+name: Perathos Gate approval
+description: >
+  Stop a workflow until a named person approves this exact run with a passkey,
+  and keep the signed, offline-verifiable receipt as an artifact.
+author: Perathos
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  summary:
+    description: What the approver reads, for example "Deploy api to production".
+    required: true
+  api-key:
+    description: Organisation API key for the Gate server. Pass it from a secret.
+    required: true
+  gate-key:
+    description: >
+      The Gate server's signing key (hex), from its /.well-known/perathos-gate.json.
+      Pinned here so a different server cannot answer for it. Not secret.
+    required: true
+  approver-keys:
+    description: >
+      Passkey public keys of the people allowed to approve, comma-separated
+      (`perathos gate approvers --keys`). Strongly recommended: without it, the
+      Gate server decides who counts as an approver. Not secret.
+    required: false
+    default: ""
+  gate-url:
+    description: URL of the Gate server.
+    required: false
+    default: https://gate.perathos.com
+  target:
+    description: The thing acted on, for example an environment name.
+    required: false
+    default: ""
+  detail:
+    description: Extra text for the approver. Defaults to repository, commit, run and actor.
+    required: false
+    default: ""
+  wait-seconds:
+    description: How long the job waits for a decision (1 to 3600).
+    required: false
+    default: "900"
+  ttl-seconds:
+    description: How long the request stays approvable on the server (60 to 3600).
+    required: false
+    default: "1800"
+  receipt-path:
+    description: Where to write the receipt.
+    required: false
+    default: perathos-approval-receipt.json
+  upload-receipt:
+    description: Upload the receipt as a workflow artifact ("true" or "false").
+    required: false
+    default: "true"
+  perathos-version:
+    description: Version of the perathos package to install.
+    required: false
+    default: "1.4.1"
+
+outputs:
+  receipt-path:
+    description: Path of the verified receipt file.
+    value: ${{ steps.request.outputs.receipt_path }}
+  receipt-hash:
+    description: Hash of the receipt, to cite in later steps or deployment records.
+    value: ${{ steps.request.outputs.receipt_hash }}
+  approver:
+    description: Name of the approver as enrolled on the Gate.
+    value: ${{ steps.request.outputs.approver }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: "3.12"
+
+    - name: Install perathos
+      shell: bash
+      env:
+        PERATHOS_VERSION: ${{ inputs.perathos-version }}
+      run: python -m pip install --quiet --disable-pip-version-check "perathos==${PERATHOS_VERSION}"
+
+    - name: Ask for approval
+      id: request
+      shell: bash
+      env:
+        PERATHOS_GATE_URL: ${{ inputs.gate-url }}
+        PERATHOS_GATE_API_KEY: ${{ inputs.api-key }}
+        PERATHOS_GATE_KEY: ${{ inputs.gate-key }}
+        PERATHOS_GATE_APPROVERS: ${{ inputs.approver-keys }}
+        IN_HOME: ${{ runner.temp }}/perathos-home
+        IN_SUMMARY: ${{ inputs.summary }}
+        IN_TARGET: ${{ inputs.target }}
+        IN_DETAIL: ${{ inputs.detail }}
+        IN_WAIT: ${{ inputs.wait-seconds }}
+        IN_TTL: ${{ inputs.ttl-seconds }}
+        IN_RECEIPT: ${{ inputs.receipt-path }}
+      run: python "${GITHUB_ACTION_PATH}/gate_step.py"
+
+    - name: Upload receipt
+      if: ${{ inputs.upload-receipt == 'true' && steps.request.outputs.receipt_path != '' }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: perathos-approval-receipt-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+        path: ${{ steps.request.outputs.receipt_path }}
+        if-no-files-found: error
