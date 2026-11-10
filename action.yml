@@ -57,7 +57,7 @@ inputs:
   perathos-version:
     description: Version of the perathos package to install.
     required: false
-    default: "1.4.1"
+    default: "1.4.3"
 
 outputs:
   receipt-path:
