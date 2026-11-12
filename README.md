@@ -76,7 +76,7 @@ the point: the workflow then trusts those keys, not whatever a server says.
 | `ttl-seconds` | no | `1800` | How long the request stays approvable (60 to 3600) |
 | `receipt-path` | no | `perathos-approval-receipt.json` | Where the receipt is written |
 | `upload-receipt` | no | `true` | Upload the receipt as an artifact |
-| `perathos-version` | no | `1.4.3` | Version of the `perathos` package to install |
+| `perathos-version` | no | `1.4.4` | Version of the `perathos` package to install |
 
 Outputs: `receipt-path`, `receipt-hash`, `approver`.
 
